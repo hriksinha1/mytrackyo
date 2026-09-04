@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { repository } from '../../lib/repository';
-import { fmtDate, fmtINR } from '../../lib/utils/formatters';
+import { fmtDate, fmtINR, generateId } from '../../lib/utils/formatters';
 import AddPaymentModal from './AddPaymentModal';
+import { generatePaymentReceiptPDF, generateBookingInvoicePDF } from '../../lib/services/pdfGenerator';
+import { Download, Eye, Mail, MessageCircle, FileText, Undo2 } from 'lucide-react';
 
 export default function BookingDetail() {
   const { id } = useParams();
   const [booking, setBooking] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -22,10 +25,12 @@ export default function BookingDetail() {
         const propData = await repository.getProperty(bData.property_id);
         const pData = await repository.getPayments(id);
         const nData = await repository.getNotifications(id);
+        const sData = await repository.getSettings();
 
         setBooking({ ...bData, customer: cData, property: propData });
         setPayments(pData || []);
         setNotifications(nData || []);
+        setSettings(sData);
       }
     } catch(err) {
       console.error(err);
@@ -51,11 +56,74 @@ export default function BookingDetail() {
     load();
   }
 
+  async function getDocForPayment(p: any, index: number) {
+    // Reconstruct previously paid for this historical receipt
+    // We filter up to this index, ignoring refunds that happened after.
+    // For simplicity, we just take the sum of Completed/Refunded payments before this one.
+    let previouslyPaid = 0;
+    for (let i = 0; i < index; i++) {
+      if (payments[i].status === 'Completed') previouslyPaid += payments[i].amount;
+      if (payments[i].status === 'Refunded') previouslyPaid -= payments[i].amount;
+    }
+    const balanceDueAfter = booking.grand_total - (previouslyPaid + (p.status === 'Refunded' ? -p.amount : p.amount));
+    return generatePaymentReceiptPDF(booking, p, booking.property, booking.customer, settings, previouslyPaid, Math.max(0, balanceDueAfter));
+  }
+
+  async function handleViewReceipt(p: any, index: number) {
+    if (!settings) return;
+    const doc = await getDocForPayment(p, index);
+    window.open(URL.createObjectURL(doc.output('blob')));
+  }
+
+  async function handleDownloadReceipt(p: any, index: number) {
+    if (!settings) return;
+    const doc = await getDocForPayment(p, index);
+    doc.save(`${p.payment_no}.pdf`);
+  }
+
+  const totalPaid = payments.reduce((sum, p) => {
+    if (p.status === 'Completed') return sum + Number(p.amount);
+    if (p.status === 'Refunded') return sum - Number(p.amount);
+    return sum;
+  }, 0);
+  const balanceDue = Number(booking?.grand_total || 0) - totalPaid;
+
+  async function handleDownloadInvoice() {
+    if (!settings || !booking) return;
+    try {
+      const doc = await generateBookingInvoicePDF(booking, payments, booking.property, booking.customer, settings, totalPaid, Math.max(0, balanceDue));
+      doc.save(`INV-${booking.booking_no}.pdf`);
+    } catch(err) {
+      console.error(err);
+      alert('Failed to generate invoice');
+    }
+  }
+
+  async function handleRefund(p: any) {
+    if (!confirm(`Are you sure you want to refund the payment of ${fmtINR(p.amount)}?`)) return;
+    try {
+      await repository.createPayment({
+        payment_no: generateId('REF-'),
+        booking_id: booking.id,
+        date: new Date().toISOString().split('T')[0],
+        amount: p.amount,
+        method: p.method,
+        ref_id: `Refund for ${p.payment_no}`,
+        status: 'Refunded'
+      });
+      
+      const newBalance = balanceDue + p.amount;
+      const paymentStatus = newBalance >= booking.grand_total ? 'Unpaid' : (newBalance <= 0 ? 'Fully Paid' : 'Partially Paid');
+      await repository.updateBooking(booking.id, { payment_status: paymentStatus });
+      
+      load();
+    } catch(err: any) {
+      alert(err.message);
+    }
+  }
+
   if (loading && !booking) return <div>Loading booking details...</div>;
   if (!booking) return <div>Booking not found.</div>;
-
-  const totalPaid = payments.filter(p => p.status === 'Completed').reduce((sum, p) => sum + Number(p.amount), 0);
-  const balanceDue = Number(booking.grand_total) - totalPaid;
 
   return (
     <div>
@@ -68,8 +136,8 @@ export default function BookingDetail() {
           <div className="page-title brand-serif">Booking {booking.booking_no}</div>
           <div className="page-sub">{booking.property?.name}</div>
         </div>
-        <div>
-           <span className="badge" style={{ backgroundColor: balanceDue <= 0 ? '#5F7A57' : '#A63A2E', color: 'white', marginRight: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+           <span className="badge" style={{ backgroundColor: balanceDue <= 0 ? '#5F7A57' : '#A63A2E', color: 'white' }}>
              {balanceDue <= 0 ? 'Fully Paid' : balanceDue === Number(booking.grand_total) ? 'Unpaid' : 'Partially Paid'}
            </span>
            <span className="badge" style={{ backgroundColor: '#2C3E50', color: 'white' }}>{booking.booking_status}</span>
@@ -77,8 +145,8 @@ export default function BookingDetail() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        <button className="btn btn-outline" onClick={handleDownloadInvoice}><FileText size={16} /> Download Invoice</button>
         <button className="btn btn-outline" onClick={() => handleDemoSend('Email', 'Booking Confirmation')}>Simulate Email Confirmation</button>
-        <button className="btn btn-outline" onClick={() => handleDemoSend('WhatsApp', 'Payment Receipt')}>Simulate WhatsApp Receipt</button>
       </div>
 
       <div className="two-col">
@@ -123,20 +191,34 @@ export default function BookingDetail() {
                 <th>Reference</th>
                 <th className="num">Amount</th>
                 <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {payments.map(p => (
+              {payments.map((p, index) => (
                 <tr key={p.id}>
                   <td>{fmtDate(p.date)}</td>
                   <td className="brand-serif">{p.payment_no}</td>
                   <td>{p.method}</td>
                   <td className="muted">{p.ref_id || '—'}</td>
-                  <td className="num">{fmtINR(p.amount)}</td>
-                  <td>{p.status}</td>
+                  <td className="num">{p.status === 'Refunded' ? `-${fmtINR(p.amount)}` : fmtINR(p.amount)}</td>
+                  <td>
+                    <span className="badge" style={{ backgroundColor: p.status === 'Refunded' ? '#928A78' : '#5F7A57', color: 'white' }}>
+                      {p.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      {p.status === 'Completed' && <button className="icon-btn" title="Refund Payment" onClick={() => handleRefund(p)}><Undo2 size={16} /></button>}
+                      <button className="icon-btn" title="View Receipt" onClick={() => handleViewReceipt(p, index)}><Eye size={16} /></button>
+                      <button className="icon-btn" title="Download PDF" onClick={() => handleDownloadReceipt(p, index)}><Download size={16} /></button>
+                      <button className="icon-btn" title="Email Receipt" onClick={() => handleDemoSend('Email', 'Payment Receipt')}><Mail size={16} /></button>
+                      <button className="icon-btn" title="WhatsApp Receipt" onClick={() => handleDemoSend('WhatsApp', 'Payment Receipt')}><MessageCircle size={16} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {payments.length === 0 && <tr><td colSpan={6} className="empty-note">No payments recorded yet.</td></tr>}
+              {payments.length === 0 && <tr><td colSpan={7} className="empty-note">No payments recorded yet.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -176,6 +258,7 @@ export default function BookingDetail() {
         <AddPaymentModal 
           booking={booking} 
           balanceDue={balanceDue} 
+          previouslyPaid={totalPaid}
           onClose={() => setShowPaymentModal(false)}
           onComplete={() => {
             setShowPaymentModal(false);

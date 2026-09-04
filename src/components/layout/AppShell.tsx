@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, CalendarDays, Users, Building, CreditCard, Settings as SettingsIcon, LogOut } from 'lucide-react';
+import { Home, CalendarDays, Users, Building, CreditCard, Settings as SettingsIcon, LogOut, BarChart } from 'lucide-react';
 import { repository } from '../../lib/repository';
 
 export type AppContextType = {
@@ -33,11 +33,17 @@ export default function AppShell({ onLogout }: { onLogout: () => void }) {
             <NavLink to="/payments" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
               <CreditCard size={17} /> Payments
             </NavLink>
+            <NavLink to="/outstanding" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
+              <CreditCard size={17} /> Outstanding
+            </NavLink>
             <NavLink to="/customers" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
               <Users size={17} /> Customers
             </NavLink>
             <NavLink to="/properties" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
               <Building size={17} /> Properties
+            </NavLink>
+            <NavLink to="/reports" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
+              <BarChart size={17} /> Reports
             </NavLink>
             <NavLink to="/settings" className={({isActive}) => `side-link ${isActive ? 'active' : ''}`}>
               <SettingsIcon size={17} /> Settings

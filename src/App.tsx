@@ -9,6 +9,8 @@ import NewBooking from './features/bookings/NewBooking';
 import CustomersList from './features/customers/CustomersList';
 import PropertiesList from './features/properties/PropertiesList';
 import PaymentsList from './features/payments/PaymentsList';
+import OutstandingPayments from './features/payments/OutstandingPayments';
+import ReportsList from './features/reports/ReportsList';
 import Settings from './features/settings/Settings';
 
 function ProtectedRoute({ session, children }: { session: any, children: React.ReactNode }) {
@@ -40,8 +42,10 @@ export default function App() {
           <Route path="bookings/new" element={<NewBooking />} />
           <Route path="bookings/:id" element={<BookingDetail />} />
           <Route path="payments" element={<PaymentsList />} />
+          <Route path="outstanding" element={<OutstandingPayments />} />
           <Route path="customers" element={<CustomersList />} />
           <Route path="properties" element={<PropertiesList />} />
+          <Route path="reports" element={<ReportsList />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

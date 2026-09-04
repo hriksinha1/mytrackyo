@@ -46,6 +46,8 @@ export default function NewBooking() {
   const taxAmount = taxEnabled ? (baseAmount * (taxRate / 100)) : 0;
   const grandTotal = baseAmount + taxAmount;
 
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -67,7 +69,7 @@ export default function NewBooking() {
 
       if (!finalCustomerId) throw new Error('Please select or create a customer.');
 
-      await repository.createBooking({
+      const newBooking = await repository.createBooking({
         booking_no: generateId('BK-'),
         customer_id: finalCustomerId,
         property_id: propertyId,
@@ -86,12 +88,32 @@ export default function NewBooking() {
         payment_status: 'Unpaid'
       });
 
-      navigate('/bookings');
+      setCreatedBookingId(newBooking.id);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (createdBookingId) {
+    return (
+      <div className="center-screen" style={{ flexDirection: 'column', height: 'auto', padding: '60px 20px' }}>
+        <div className="card" style={{ width: 400, maxWidth: '100%', textAlign: 'center' }}>
+          <div style={{ color: '#5F7A57', fontSize: 24, marginBottom: 8 }}>Booking Created</div>
+          <div className="muted" style={{ marginBottom: 24 }}>The reservation has been confirmed.</div>
+          
+          <div className="stack">
+            <button className="btn btn-primary full" onClick={() => navigate(`/bookings/${createdBookingId}`)}>
+              Record Advance Payment
+            </button>
+            <button className="btn btn-outline full" onClick={() => navigate('/bookings')}>
+              Skip Payment
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
