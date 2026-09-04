@@ -1,0 +1,104 @@
+export interface Property {
+  id: string;
+  name: string;
+  property_type: string;
+  location: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone: string;
+  email: string;
+  gstin?: string;
+  check_in_time: string;
+  check_out_time: string;
+  description?: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  created_at: string;
+}
+
+export interface Booking {
+  id: string;
+  booking_no: string;
+  customer_id: string;
+  property_id: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  rooms: number;
+  guests: number;
+  room_type: string;
+  base_amount: number;
+  tax_enabled: boolean;
+  tax_rate: number;
+  tax_amount: number;
+  grand_total: number;
+  booking_status: string;
+  payment_status: string;
+  created_at: string;
+}
+
+export interface Payment {
+  id: string;
+  payment_no: string;
+  booking_id: string;
+  date: string;
+  amount: number;
+  method: string;
+  ref_id?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  booking_id: string;
+  customer_id: string;
+  channel: string; // 'Email' | 'WhatsApp'
+  type: string; // 'Booking Confirmation' | 'Payment Receipt'
+  recipient: string;
+  status: string; // 'Demo Sent' | 'Sent' | 'Failed'
+  created_at: string;
+}
+
+export interface BusinessSettings {
+  name: string;
+  legalName: string;
+  gstin: string;
+}
+
+export interface IRepository {
+  getProperties(): Promise<Property[]>;
+  getProperty(id: string): Promise<Property | null>;
+  createProperty(data: Omit<Property, 'id' | 'created_at'>): Promise<Property>;
+  updateProperty(id: string, data: Partial<Property>): Promise<Property>;
+
+  getCustomers(): Promise<Customer[]>;
+  getCustomer(id: string): Promise<Customer | null>;
+  createCustomer(data: Omit<Customer, 'id' | 'created_at'>): Promise<Customer>;
+
+  getBookings(propertyId?: string): Promise<Booking[]>;
+  getBooking(id: string): Promise<Booking | null>;
+  createBooking(data: Omit<Booking, 'id' | 'created_at'>): Promise<Booking>;
+  updateBooking(id: string, data: Partial<Booking>): Promise<Booking>;
+
+  getPayments(bookingId?: string): Promise<Payment[]>;
+  getAllPayments(propertyId?: string): Promise<Payment[]>;
+  createPayment(data: Omit<Payment, 'id' | 'created_at'>): Promise<Payment>;
+
+  getNotifications(bookingId?: string): Promise<Notification[]>;
+  createNotification(data: Omit<Notification, 'id' | 'created_at'>): Promise<Notification>;
+
+  getSettings(): Promise<BusinessSettings>;
+  updateSettings(data: Partial<BusinessSettings>): Promise<BusinessSettings>;
+
+  resetDemoData(): Promise<void>;
+}
