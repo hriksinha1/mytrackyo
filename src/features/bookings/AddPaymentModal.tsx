@@ -18,6 +18,7 @@ export default function AddPaymentModal({
   const [amount, setAmount] = useState<number | ''>(balanceDue);
   const [method, setMethod] = useState('Google Pay');
   const [refId, setRefId] = useState('');
+  const [purpose, setPurpose] = useState('Payment');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export default function AddPaymentModal({
     repository.getSettings().then(setSettings);
     repository.getPayments(booking.id).then(payments => {
         const total = payments.reduce((sum, p) => {
-            if (p.status === 'Completed') return sum + Number(p.amount);
+            if (p.status === 'Completed' || p.status === 'Recorded') return sum + Number(p.amount);
             if (p.status === 'Refunded') return sum - Number(p.amount);
             return sum;
         }, 0);
@@ -55,12 +56,13 @@ export default function AddPaymentModal({
         date,
         amount: numAmount,
         method,
+        purpose,
         ref_id: refId,
-        status: 'Completed'
+        status: 'Recorded'
       });
 
       const newBalance = balanceDue - numAmount;
-      const paymentStatus = newBalance <= 0 ? 'Fully Paid' : 'Partially Paid';
+      const paymentStatus = newBalance <= 0 ? 'Paid' : 'Partially Paid';
       
       await repository.updateBooking(booking.id, { payment_status: paymentStatus });
       setSuccessData({ payment, numAmount, newBalance });
@@ -168,14 +170,14 @@ export default function AddPaymentModal({
         </div>
         
         <form onSubmit={handleSubmit} className="p-6">
-          <div className="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-4 flex justify-between items-center">
+          <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4 flex justify-between items-center">
             <div>
-              <div className="text-xs font-medium text-blue-800 mb-1">Booking {booking.booking_no}</div>
-              <div className="text-sm text-blue-900">Total: {fmtINR(booking.grand_total)}</div>
+              <div className="text-xs font-medium text-gray-500 mb-1">Booking {booking.booking_no}</div>
+              <div className="text-sm font-medium text-gray-900">Total: {fmtINR(booking.grand_total)}</div>
             </div>
             <div className="text-right">
-              <div className="text-xs font-medium text-blue-800 mb-1">Balance Due</div>
-              <div className="text-lg font-bold text-blue-900">{fmtINR(balanceDue)}</div>
+              <div className="text-xs font-medium text-gray-500 mb-1">Amount Due</div>
+              <div className="text-lg font-bold text-gray-900">{fmtINR(balanceDue)}</div>
             </div>
           </div>
 
@@ -225,16 +227,31 @@ export default function AddPaymentModal({
                 placeholder="e.g. UTR number, Receipt number"
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
-              <input 
-                type="date" 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none transition-shadow"
-                value={date} 
-                onChange={e => setDate(e.target.value)} 
-                required 
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Purpose</label>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none transition-shadow bg-white"
+                  value={purpose} 
+                  onChange={e => setPurpose(e.target.value)}
+                >
+                  <option value="Advance">Advance</option>
+                  <option value="During stay">During stay</option>
+                  <option value="Final payment">Final payment</option>
+                  <option value="Payment">Other Payment</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none transition-shadow"
+                  value={date} 
+                  onChange={e => setDate(e.target.value)} 
+                  required 
+                />
+              </div>
             </div>
           </div>
 

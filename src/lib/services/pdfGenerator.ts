@@ -118,7 +118,7 @@ export async function generateBookingInvoicePDF(
   doc.text('Payment Transactions:', 14, yPos);
   yPos += 6;
 
-  const validPayments = payments.filter(p => p.status === 'Completed' || p.status === 'Refunded');
+  const validPayments = payments.filter(p => p.status === 'Completed' || p.status === 'Recorded' || p.status === 'Refunded');
   
   if (validPayments.length > 0) {
     autoTable(doc, {

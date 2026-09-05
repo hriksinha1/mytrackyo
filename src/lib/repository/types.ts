@@ -56,8 +56,10 @@ export interface Payment {
   amount: number;
   method: string;
   ref_id?: string;
+  purpose?: string;
   status: string;
   created_at: string;
+  booking?: any;
 }
 
 export interface Notification {

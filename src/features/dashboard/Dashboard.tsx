@@ -28,14 +28,14 @@ export default function Dashboard() {
         let partiallyPaid = 0;
         const todayStr = new Date().toISOString().split('T')[0];
         
-        revenue = payments.filter(p => p.status === 'Completed').reduce((sum, p) => sum + Number(p.amount), 0);
+        revenue = payments.filter(p => p.status === 'Completed' || p.status === 'Recorded').reduce((sum, p) => sum + Number(p.amount), 0);
         const totalGrand = bookings.reduce((sum, b) => sum + Number(b.grand_total), 0);
         outstanding = totalGrand - revenue;
         
         bookings.forEach(b => {
            if (b.created_at.startsWith(todayStr)) todayBookings++;
            if (b.check_in === todayStr) checkIns++;
-           if (b.payment_status === 'Fully Paid') fullyPaid++;
+           if (b.payment_status === 'Fully Paid' || b.payment_status === 'Paid') fullyPaid++;
            if (b.payment_status === 'Partially Paid') partiallyPaid++;
         });
 
@@ -192,7 +192,7 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Fully Paid</span>
+                  <span className="text-gray-600 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Paid</span>
                   <span className="font-medium text-gray-900">{stats.fullyPaid}</span>
                 </div>
               </div>
@@ -234,7 +234,7 @@ export default function Dashboard() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {recentBookings.map(b => {
                 const totalPaid = b.grand_total; // need to fetch payments per booking ideally, but for demo UI we use payment_status
-                const isPaid = b.payment_status === 'Fully Paid';
+                const isPaid = b.payment_status === 'Paid' || b.payment_status === 'Fully Paid';
                 const isPartial = b.payment_status === 'Partially Paid';
                 return (
                   <tr key={b.id} className="hover:bg-gray-50 transition-colors group cursor-pointer" onClick={() => window.location.href=`/bookings/${b.id}`}>

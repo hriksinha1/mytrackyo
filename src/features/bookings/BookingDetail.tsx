@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { repository } from '../../lib/repository';
 import { fmtDate, fmtINR, generateId } from '../../lib/utils/formatters';
+import { calculateBookingPaymentSummary } from '../../lib/utils/financials';
 import AddPaymentModal from './AddPaymentModal';
 import { generatePaymentReceiptPDF, generateBookingInvoicePDF } from '../../lib/services/pdfGenerator';
 import { Download, Eye, Mail, MessageCircle, FileText, Undo2, ArrowLeft, Building, User, Calendar, CreditCard, ChevronRight } from 'lucide-react';
@@ -50,7 +51,7 @@ export default function BookingDetail() {
   async function getDocForPayment(p: any, index: number) {
     let previouslyPaid = 0;
     for (let i = 0; i < index; i++) {
-      if (payments[i].status === 'Completed') previouslyPaid += payments[i].amount;
+      if (payments[i].status === 'Completed' || payments[i].status === 'Recorded') previouslyPaid += payments[i].amount;
       if (payments[i].status === 'Refunded') previouslyPaid -= payments[i].amount;
     }
     const balanceDueAfter = booking.grand_total - (previouslyPaid + (p.status === 'Refunded' ? -p.amount : p.amount));
@@ -69,12 +70,7 @@ export default function BookingDetail() {
     doc.save(`${p.payment_no}.pdf`);
   }
 
-  const totalPaid = payments.reduce((sum, p) => {
-    if (p.status === 'Completed') return sum + Number(p.amount);
-    if (p.status === 'Refunded') return sum - Number(p.amount);
-    return sum;
-  }, 0);
-  const balanceDue = Number(booking?.grand_total || 0) - totalPaid;
+  const { totalAmount, totalPaid, balanceDue, paymentStatus } = booking && payments ? calculateBookingPaymentSummary(booking, payments) : { totalAmount: 0, totalPaid: 0, balanceDue: 0, paymentStatus: 'Unpaid' };
 
   async function handleDownloadInvoice() {
     if (!settings || !booking) return;
@@ -101,8 +97,8 @@ export default function BookingDetail() {
       });
       
       const newBalance = balanceDue + p.amount;
-      const paymentStatus = newBalance >= booking.grand_total ? 'Unpaid' : (newBalance <= 0 ? 'Fully Paid' : 'Partially Paid');
-      await repository.updateBooking(booking.id, { payment_status: paymentStatus });
+      const newPaymentStatus = newBalance >= booking.grand_total ? 'Unpaid' : (newBalance <= 0 ? 'Paid' : 'Partially Paid');
+      await repository.updateBooking(booking.id, { payment_status: newPaymentStatus });
       
       load();
     } catch(err: any) {
@@ -124,9 +120,8 @@ export default function BookingDetail() {
   
   if (!booking) return <div>Booking not found.</div>;
 
-  const isPaid = balanceDue <= 0;
-  const isUnpaid = balanceDue === Number(booking.grand_total);
-  const paymentStatus = isPaid ? 'Fully Paid' : isUnpaid ? 'Unpaid' : 'Partially Paid';
+  const isPaid = paymentStatus === 'Paid';
+  const isUnpaid = paymentStatus === 'Unpaid';
 
   return (
     <div className="space-y-6 pb-20">
@@ -145,7 +140,7 @@ export default function BookingDetail() {
             </span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
               isPaid ? 'bg-green-100 text-green-700' : 
-              isUnpaid ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+              isUnpaid ? 'bg-gray-100 text-gray-700' : 'bg-amber-100 text-amber-700'
             }`}>
               {paymentStatus}
             </span>
@@ -159,9 +154,15 @@ export default function BookingDetail() {
           <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors" onClick={handleDownloadInvoice}>
             <FileText size={16} /> Invoice
           </button>
-          <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors" onClick={() => setShowPayModal(true)}>
-            Record Payment
-          </button>
+          {balanceDue > 0 ? (
+            <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors" onClick={() => setShowPayModal(true)}>
+              Record Payment
+            </button>
+          ) : (
+            <div className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-green-50 text-green-700 rounded-lg border border-green-200">
+              Paid in full
+            </div>
+          )}
         </div>
       </div>
 
@@ -205,7 +206,7 @@ export default function BookingDetail() {
               <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><User size={18} className="text-gray-400" /> Guest Information</h2>
             </div>
             <div className="p-5 flex items-start gap-4">
-              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0">
+              <div className="w-12 h-12 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0">
                 {booking.customer?.name?.[0]?.toUpperCase() || 'U'}
               </div>
               <div>
@@ -225,6 +226,7 @@ export default function BookingDetail() {
                 <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
                   <tr>
                     <th className="px-5 py-3 font-medium">Date</th>
+                    <th className="px-5 py-3 font-medium">Payment</th>
                     <th className="px-5 py-3 font-medium">Method</th>
                     <th className="px-5 py-3 font-medium">Reference</th>
                     <th className="px-5 py-3 font-medium text-right">Amount</th>
@@ -236,32 +238,33 @@ export default function BookingDetail() {
                   {payments.map((p, index) => (
                     <tr key={p.id} className="hover:bg-gray-50">
                       <td className="px-5 py-3 text-gray-600">{fmtDate(p.date)}</td>
-                      <td className="px-5 py-3 text-gray-900">{p.method}</td>
+                      <td className="px-5 py-3 text-gray-900">{p.purpose || 'Payment'}</td>
+                      <td className="px-5 py-3 text-gray-600">{p.method}</td>
                       <td className="px-5 py-3 text-gray-500">{p.ref_id || '—'}</td>
                       <td className="px-5 py-3 text-right tabular-nums font-medium text-gray-900">
                         {p.status === 'Refunded' ? `-${fmtINR(p.amount)}` : fmtINR(p.amount)}
                       </td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          p.status === 'Refunded' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-700'
+                          p.status === 'Refunded' ? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-700'
                         }`}>
-                          {p.status}
+                          {p.status === 'Completed' ? 'Recorded' : p.status}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {p.status === 'Completed' && (
+                          {(p.status === 'Completed' || p.status === 'Recorded') && (
                             <button className="p-1.5 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors" title="Refund Payment" onClick={() => handleRefund(p)}>
                               <Undo2 size={16} />
                             </button>
                           )}
-                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="View Receipt" onClick={() => handleViewReceipt(p, index)}>
+                          <button className="p-1.5 text-gray-400 hover:text-gray-900 rounded hover:bg-gray-100 transition-colors" title="View Receipt" onClick={() => handleViewReceipt(p, index)}>
                             <Eye size={16} />
                           </button>
-                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="Download PDF" onClick={() => handleDownloadReceipt(p, index)}>
+                          <button className="p-1.5 text-gray-400 hover:text-gray-900 rounded hover:bg-gray-100 transition-colors" title="Download PDF" onClick={() => handleDownloadReceipt(p, index)}>
                             <Download size={16} />
                           </button>
-                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="Email Receipt" onClick={() => handleDemoSend('Email', 'Payment Receipt')}>
+                          <button className="p-1.5 text-gray-400 hover:text-gray-900 rounded hover:bg-gray-100 transition-colors" title="Email Receipt" onClick={() => handleDemoSend('Email', 'Payment Receipt')}>
                             <Mail size={16} />
                           </button>
                         </div>
@@ -270,7 +273,7 @@ export default function BookingDetail() {
                   ))}
                   {payments.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-5 py-8 text-center text-gray-500">
+                      <td colSpan={7} className="px-5 py-8 text-center text-gray-500">
                         No payments recorded yet.
                       </td>
                     </tr>
@@ -283,43 +286,43 @@ export default function BookingDetail() {
 
         {/* Sidebar Summary (1/3) */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-gray-900 rounded-xl shadow-sm overflow-hidden text-white">
-            <div className="p-5 border-b border-gray-800">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-gray-900">
+            <div className="p-5 border-b border-gray-200 bg-gray-50">
               <h2 className="text-base font-semibold">Financial Summary</h2>
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex justify-between items-center text-sm text-gray-300">
-                <span>Base Amount</span>
-                <span className="font-medium text-white">{fmtINR(booking.base_amount)}</span>
+              <div className="flex justify-between items-center text-sm text-gray-600">
+                <span>Room & Stay Charges</span>
+                <span className="font-medium text-gray-900">{fmtINR(booking.base_amount)}</span>
               </div>
               {booking.tax_enabled && (
-                <div className="flex justify-between items-center text-sm text-gray-300">
+                <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Taxes (GST {booking.tax_rate}%)</span>
-                  <span className="font-medium text-white">{fmtINR(booking.tax_amount)}</span>
+                  <span className="font-medium text-gray-900">{fmtINR(booking.tax_amount)}</span>
                 </div>
               )}
               {booking.discount > 0 && (
-                <div className="flex justify-between items-center text-sm text-gray-300">
+                <div className="flex justify-between items-center text-sm text-gray-600">
                   <span>Discount</span>
-                  <span className="font-medium text-green-400">-{fmtINR(booking.discount)}</span>
+                  <span className="font-medium text-green-600">-{fmtINR(booking.discount)}</span>
                 </div>
               )}
               
-              <div className="pt-4 border-t border-gray-800">
+              <div className="pt-4 border-t border-gray-200">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-gray-300">Total Booking</span>
+                  <span className="text-gray-700 font-medium">Booking Amount</span>
                   <span className="text-lg font-bold">{fmtINR(booking.grand_total)}</span>
                 </div>
               </div>
               
-              <div className="bg-gray-800 rounded-lg p-4 space-y-3 mt-4">
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 mt-4 border border-gray-100">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-300">Paid so far</span>
-                  <span className="font-medium text-green-400">{fmtINR(totalPaid)}</span>
+                  <span className="text-gray-600">Paid</span>
+                  <span className="font-medium text-gray-900">{fmtINR(totalPaid)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-200 font-medium">Balance Due</span>
-                  <span className={`text-lg font-bold ${balanceDue > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                  <span className="text-gray-900 font-bold">Amount Due</span>
+                  <span className={`text-xl font-bold ${balanceDue > 0 ? 'text-amber-600' : 'text-green-600'}`}>
                     {fmtINR(balanceDue)}
                   </span>
                 </div>
@@ -327,7 +330,7 @@ export default function BookingDetail() {
               
               {balanceDue > 0 && (
                 <button 
-                  className="w-full py-2.5 bg-white text-gray-900 rounded-lg font-semibold text-sm hover:bg-gray-100 transition-colors mt-2"
+                  className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors mt-2"
                   onClick={() => setShowPayModal(true)}
                 >
                   Record Payment

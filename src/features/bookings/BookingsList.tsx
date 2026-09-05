@@ -99,7 +99,7 @@ export default function BookingsList() {
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {filteredBookings.map(b => {
-                const isPaid = b.payment_status === 'Fully Paid';
+                const isPaid = b.payment_status === 'Paid' || b.payment_status === 'Fully Paid';
                 const isPartial = b.payment_status === 'Partially Paid';
                 
                 return (

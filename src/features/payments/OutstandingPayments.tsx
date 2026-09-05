@@ -26,7 +26,7 @@ export default function OutstandingPayments() {
         const propMap = propRes.reduce((acc: any, p: any) => ({...acc, [p.id]: p}), {});
         
         const paymentsByBooking = pRes.reduce((acc: any, p: any) => {
-          if (p.status === 'Completed') {
+          if (p.status === 'Completed' || p.status === 'Recorded') {
             acc[p.booking_id] = (acc[p.booking_id] || 0) + Number(p.amount);
           } else if (p.status === 'Refunded') {
             acc[p.booking_id] = (acc[p.booking_id] || 0) - Number(p.amount);

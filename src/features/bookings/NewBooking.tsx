@@ -130,7 +130,7 @@ export default function NewBooking() {
       }
 
       const bookingStatus = 'Confirmed';
-      const paymentStatus = balanceDue <= 0 ? 'Fully Paid' : (numPayment > 0 ? 'Partially Paid' : 'Unpaid');
+      const paymentStatus = balanceDue <= 0 ? 'Paid' : (numPayment > 0 ? 'Partially Paid' : 'Unpaid');
 
       const newBooking = await repository.createBooking({
         booking_no: generateId('BK-'),
@@ -158,8 +158,9 @@ export default function NewBooking() {
           date: new Date().toISOString().split('T')[0],
           amount: numPayment,
           method: paymentMethod,
+          purpose: paymentType === 'Advance payment' ? 'Advance' : 'Final payment',
           ref_id: paymentRef,
-          status: 'Completed'
+          status: 'Recorded'
         });
       }
 

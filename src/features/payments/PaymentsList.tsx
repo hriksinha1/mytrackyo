@@ -51,7 +51,7 @@ export default function PaymentsList() {
     p.ref_id?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalCollected = filteredPayments.filter(p => p.status === 'Completed').reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalCollected = filteredPayments.filter(p => p.status === 'Completed' || p.status === 'Recorded').reduce((sum, p) => sum + Number(p.amount), 0);
   const totalRefunded = filteredPayments.filter(p => p.status === 'Refunded').reduce((sum, p) => sum + Number(p.amount), 0);
 
   if (loading) {
@@ -146,7 +146,7 @@ export default function PaymentsList() {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      p.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      p.status === 'Completed' || p.status === 'Recorded' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                     }`}>
                       {p.status}
                     </span>

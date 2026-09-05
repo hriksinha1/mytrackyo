@@ -29,7 +29,7 @@ export default function ReportsList() {
         });
         
         payments.forEach(p => {
-          if (p.status === 'Completed') {
+          if (p.status === 'Completed' || p.status === 'Recorded') {
             amountCollected += p.amount;
             methodMap[p.method] = (methodMap[p.method] || 0) + p.amount;
           } else if (p.status === 'Refunded') {
