@@ -45,7 +45,7 @@ export default function BookingDetail() {
   }
 
   const handleDemoSend = (method: string, docType: string) => {
-    alert(`Demo Mode: Simulated sending ${docType} via ${method}. In production, this connects to the respective API.`);
+    alert(`Demo: Sent\n${docType} shared via ${method}.`);
   };
 
   async function getDocForPayment(p: any, index: number) {
@@ -292,7 +292,7 @@ export default function BookingDetail() {
             </div>
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-center text-sm text-gray-600">
-                <span>Room & Stay Charges</span>
+                <span>Accommodation Charges</span>
                 <span className="font-medium text-gray-900">{fmtINR(booking.base_amount)}</span>
               </div>
               {booking.tax_enabled && (
@@ -310,7 +310,7 @@ export default function BookingDetail() {
               
               <div className="pt-4 border-t border-gray-200">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-gray-700 font-medium">Booking Amount</span>
+                  <span className="text-gray-700 font-medium">Total Booking Amount</span>
                   <span className="text-lg font-bold">{fmtINR(booking.grand_total)}</span>
                 </div>
               </div>

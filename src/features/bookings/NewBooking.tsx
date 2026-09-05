@@ -94,16 +94,16 @@ export default function NewBooking() {
       }
     } else if (step === 2) {
       if (!newCustomer && !customerId) {
-        setError('Please select a customer.');
+        setError('Please select a guest.');
         return;
       }
       if (newCustomer && (!customerName || !customerPhone)) {
-        setError('Name and phone are required for new customers.');
+        setError('Name and phone are required for new guests.');
         return;
       }
     } else if (step === 3) {
       if (numBase <= 0) {
-        setError('Please enter a valid base amount.');
+        setError('Please enter valid accommodation charges.');
         return;
       }
     }
@@ -202,7 +202,7 @@ export default function NewBooking() {
       </div>
 
       <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Create Reservation</h1>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Create Booking</h1>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -284,7 +284,7 @@ export default function NewBooking() {
 
                 {!newCustomer ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Customer</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Guest</label>
                     <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm" value={customerId} onChange={e => setCustomerId(e.target.value)}>
                       <option value="">-- Select --</option>
                       {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
@@ -328,7 +328,7 @@ export default function NewBooking() {
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Base Amount (₹)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Accommodation Charges (₹)</label>
                     <input type="number" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm" value={baseAmount} onChange={e => setBaseAmount(Number(e.target.value) || '')} min="0" />
                   </div>
                   <div>
@@ -368,6 +368,7 @@ export default function NewBooking() {
             </div>
             {step === 4 && (
               <div className="p-5 space-y-4">
+                <p className="text-sm text-gray-500 mb-2">Optional. You can record more payments later from this booking.</p>
                 <div className="flex bg-gray-100 p-1 rounded-lg w-full mb-4">
                   {['No payment', 'Advance payment', 'Full payment'].map(t => (
                     <button key={t} type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${paymentType === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setPaymentType(t)}>
@@ -437,7 +438,7 @@ export default function NewBooking() {
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-800 mt-2">
-                  <span>Total</span>
+                  <span>Total Booking Amount</span>
                   <span>{fmtINR(grandTotal)}</span>
                 </div>
               </div>

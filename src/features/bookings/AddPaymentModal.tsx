@@ -47,8 +47,8 @@ export default function AddPaymentModal({
 
     try {
       const numAmount = Number(amount);
-      if (numAmount <= 0) throw new Error('Payment amount must be greater than zero.');
-      if (numAmount > balanceDue) throw new Error(`Amount exceeds balance due (${fmtINR(balanceDue)}).`);
+      if (numAmount <= 0) throw new Error('Enter an amount greater than ₹0.');
+      if (numAmount > balanceDue) throw new Error(`You can record up to ${fmtINR(balanceDue)} because that is the remaining amount due.`);
       
       const payment = await repository.createPayment({
         payment_no: generateId('REC-'),
@@ -93,7 +93,7 @@ export default function AddPaymentModal({
   }
 
   const handleDemoSend = (channel: string) => {
-    alert(`Demo Mode: Simulated sending Payment Receipt via ${channel}.`);
+    alert(`Demo: Sent\nPayment receipt shared via ${channel}.`);
   };
 
   if (successData) {
@@ -105,6 +105,11 @@ export default function AddPaymentModal({
               <CheckCircle size={32} className="text-green-600" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-1">Payment Recorded</h2>
+            <p className="text-sm text-gray-500 mb-2">
+              {successData.newBalance > 0 
+                ? `${fmtINR(successData.newBalance)} remains due.` 
+                : 'This booking is now fully paid.'}
+            </p>
             <div className="text-center">
               <div className="text-3xl font-bold text-gray-900 my-2">{fmtINR(successData.numAmount)}</div>
               <div className="text-sm text-gray-500">received via {successData.payment.method}</div>
@@ -124,7 +129,7 @@ export default function AddPaymentModal({
               <span className="font-medium text-gray-900">{fmtINR(booking.grand_total - successData.newBalance)}</span>
             </div>
             <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
-              <span className="text-gray-600 font-medium">Balance Due</span>
+              <span className="text-gray-600 font-medium">Amount Due</span>
               <span className={`font-bold ${successData.newBalance > 0 ? 'text-amber-600' : 'text-green-600'}`}>
                 {fmtINR(successData.newBalance)}
               </span>
