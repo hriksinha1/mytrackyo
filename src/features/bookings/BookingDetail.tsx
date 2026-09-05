@@ -4,62 +4,50 @@ import { repository } from '../../lib/repository';
 import { fmtDate, fmtINR, generateId } from '../../lib/utils/formatters';
 import AddPaymentModal from './AddPaymentModal';
 import { generatePaymentReceiptPDF, generateBookingInvoicePDF } from '../../lib/services/pdfGenerator';
-import { Download, Eye, Mail, MessageCircle, FileText, Undo2 } from 'lucide-react';
+import { Download, Eye, Mail, MessageCircle, FileText, Undo2, ArrowLeft, Building, User, Calendar, CreditCard, ChevronRight } from 'lucide-react';
 
 export default function BookingDetail() {
   const { id } = useParams();
   const [booking, setBooking] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-
-  async function load() {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const bData = await repository.getBooking(id);
-      if (bData) {
-        const cData = await repository.getCustomer(bData.customer_id);
-        const propData = await repository.getProperty(bData.property_id);
-        const pData = await repository.getPayments(id);
-        const nData = await repository.getNotifications(id);
-        const sData = await repository.getSettings();
-
-        setBooking({ ...bData, customer: cData, property: propData });
-        setPayments(pData || []);
-        setNotifications(nData || []);
-        setSettings(sData);
-      }
-    } catch(err) {
-      console.error(err);
-    }
-    setLoading(false);
-  }
+  const [showPayModal, setShowPayModal] = useState(false);
 
   useEffect(() => {
     load();
   }, [id]);
 
-  async function handleDemoSend(channel: string, type: string) {
-    if (!booking) return;
-    await repository.createNotification({
-      booking_id: booking.id,
-      customer_id: booking.customer_id,
-      channel,
-      type,
-      recipient: channel === 'Email' ? booking.customer?.email || 'Unknown' : booking.customer?.phone || 'Unknown',
-      status: 'Demo Sent'
-    });
-    alert(`Demo ${channel} prepared and marked as "Demo Sent". No actual message was delivered.`);
-    load();
+  async function load() {
+    setLoading(true);
+    try {
+      const [bData, pData, sData, cData, propData] = await Promise.all([
+        repository.getBooking(id as string),
+        repository.getPayments(id as string),
+        repository.getSettings(),
+        repository.getCustomers(),
+        repository.getProperties()
+      ]);
+      const b = bData;
+      if (b) {
+        b.customer = cData.find(c => c.id === b.customer_id);
+        b.property = propData.find(p => p.id === b.property_id);
+      }
+      setBooking(b);
+      setPayments(pData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      setSettings(sData);
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  const handleDemoSend = (method: string, docType: string) => {
+    alert(`Demo Mode: Simulated sending ${docType} via ${method}. In production, this connects to the respective API.`);
+  };
+
   async function getDocForPayment(p: any, index: number) {
-    // Reconstruct previously paid for this historical receipt
-    // We filter up to this index, ignoring refunds that happened after.
-    // For simplicity, we just take the sum of Completed/Refunded payments before this one.
     let previouslyPaid = 0;
     for (let i = 0; i < index; i++) {
       if (payments[i].status === 'Completed') previouslyPaid += payments[i].amount;
@@ -122,146 +110,253 @@ export default function BookingDetail() {
     }
   }
 
-  if (loading && !booking) return <div>Loading booking details...</div>;
+  if (loading && !booking) {
+    return (
+      <div className="animate-pulse space-y-6">
+        <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="col-span-2 h-64 bg-white border border-gray-100 rounded-xl shadow-sm"></div>
+          <div className="h-64 bg-white border border-gray-100 rounded-xl shadow-sm"></div>
+        </div>
+      </div>
+    );
+  }
+  
   if (!booking) return <div>Booking not found.</div>;
 
+  const isPaid = balanceDue <= 0;
+  const isUnpaid = balanceDue === Number(booking.grand_total);
+  const paymentStatus = isPaid ? 'Fully Paid' : isUnpaid ? 'Unpaid' : 'Partially Paid';
+
   return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <Link to="/bookings" className="link-btn">← Back to Bookings</Link>
+    <div className="space-y-6 pb-20">
+      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+        <Link to="/bookings" className="hover:text-gray-900 transition-colors">Bookings</Link>
+        <ChevronRight size={14} />
+        <span className="text-gray-900 font-medium">{booking.booking_no}</span>
       </div>
-      
-      <div className="page-head">
+
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
-          <div className="page-title brand-serif">Booking {booking.booking_no}</div>
-          <div className="page-sub">{booking.property?.name}</div>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{booking.booking_no}</h1>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
+              {booking.booking_status}
+            </span>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              isPaid ? 'bg-green-100 text-green-700' : 
+              isUnpaid ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+            }`}>
+              {paymentStatus}
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 flex items-center gap-2">
+            <Building size={14} /> {booking.property?.name}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-           <span className="badge" style={{ backgroundColor: balanceDue <= 0 ? '#5F7A57' : '#A63A2E', color: 'white' }}>
-             {balanceDue <= 0 ? 'Fully Paid' : balanceDue === Number(booking.grand_total) ? 'Unpaid' : 'Partially Paid'}
-           </span>
-           <span className="badge" style={{ backgroundColor: '#2C3E50', color: 'white' }}>{booking.booking_status}</span>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <button className="btn btn-outline" onClick={handleDownloadInvoice}><FileText size={16} /> Download Invoice</button>
-        <button className="btn btn-outline" onClick={() => handleDemoSend('Email', 'Booking Confirmation')}>Simulate Email Confirmation</button>
-      </div>
-
-      <div className="two-col">
-        <div className="card">
-          <div className="card-head">Stay Details</div>
-          <p><strong>Check-in:</strong> {fmtDate(booking.check_in)}</p>
-          <p><strong>Check-out:</strong> {fmtDate(booking.check_out)}</p>
-          <p><strong>Nights:</strong> {booking.nights}</p>
-          <p><strong>Guests:</strong> {booking.guests}</p>
-          <p><strong>Rooms:</strong> {booking.rooms}</p>
-        </div>
-
-        <div className="card">
-          <div className="card-head">Customer Details</div>
-          <p><strong>Name:</strong> {booking.customer?.name}</p>
-          <p><strong>Phone:</strong> {booking.customer?.phone}</p>
-          <p><strong>Email:</strong> {booking.customer?.email || '—'}</p>
+        
+        <div className="flex items-center gap-2">
+          <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors" onClick={handleDownloadInvoice}>
+            <FileText size={16} /> Invoice
+          </button>
+          <button className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors" onClick={() => setShowPayModal(true)}>
+            Record Payment
+          </button>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <div className="card-head-row">
-          <div className="card-head">Financial Summary</div>
-          {balanceDue > 0 && (
-            <button className="btn btn-primary" onClick={() => setShowPaymentModal(true)}>Record Payment</button>
-          )}
-        </div>
-        <p><strong>Grand Total:</strong> {fmtINR(booking.grand_total)}</p>
-        <p><strong>Total Paid:</strong> {fmtINR(totalPaid)}</p>
-        <p><strong style={{ color: balanceDue > 0 ? '#A63A2E' : '#5F7A57' }}>Balance Due:</strong> {fmtINR(balanceDue)}</p>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Details (2/3) */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><Calendar size={18} className="text-gray-400" /> Stay Details</h2>
+            </div>
+            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Check-in</div>
+                <div className="font-medium text-gray-900">{fmtDate(booking.check_in)}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Check-out</div>
+                <div className="font-medium text-gray-900">{fmtDate(booking.check_out)}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Nights</div>
+                <div className="font-medium text-gray-900">{booking.nights}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Rooms</div>
+                <div className="font-medium text-gray-900">{booking.rooms}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Guests</div>
+                <div className="font-medium text-gray-900">{booking.guests}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-xs font-medium text-gray-500 mb-1">Room Type</div>
+                <div className="font-medium text-gray-900">{booking.room_type || 'Standard'}</div>
+              </div>
+            </div>
+          </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <div className="card-head">Payment Ledger</div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Payment No</th>
-                <th>Method</th>
-                <th>Reference</th>
-                <th className="num">Amount</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p, index) => (
-                <tr key={p.id}>
-                  <td>{fmtDate(p.date)}</td>
-                  <td className="brand-serif">{p.payment_no}</td>
-                  <td>{p.method}</td>
-                  <td className="muted">{p.ref_id || '—'}</td>
-                  <td className="num">{p.status === 'Refunded' ? `-${fmtINR(p.amount)}` : fmtINR(p.amount)}</td>
-                  <td>
-                    <span className="badge" style={{ backgroundColor: p.status === 'Refunded' ? '#928A78' : '#5F7A57', color: 'white' }}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      {p.status === 'Completed' && <button className="icon-btn" title="Refund Payment" onClick={() => handleRefund(p)}><Undo2 size={16} /></button>}
-                      <button className="icon-btn" title="View Receipt" onClick={() => handleViewReceipt(p, index)}><Eye size={16} /></button>
-                      <button className="icon-btn" title="Download PDF" onClick={() => handleDownloadReceipt(p, index)}><Download size={16} /></button>
-                      <button className="icon-btn" title="Email Receipt" onClick={() => handleDemoSend('Email', 'Payment Receipt')}><Mail size={16} /></button>
-                      <button className="icon-btn" title="WhatsApp Receipt" onClick={() => handleDemoSend('WhatsApp', 'Payment Receipt')}><MessageCircle size={16} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {payments.length === 0 && <tr><td colSpan={7} className="empty-note">No payments recorded yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><User size={18} className="text-gray-400" /> Guest Information</h2>
+            </div>
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0">
+                {booking.customer?.name?.[0]?.toUpperCase() || 'U'}
+              </div>
+              <div>
+                <div className="font-medium text-gray-900 text-base">{booking.customer?.name || 'Unknown'}</div>
+                <div className="text-sm text-gray-500 mt-1">{booking.customer?.phone || 'No phone provided'}</div>
+                {booking.customer?.email && <div className="text-sm text-gray-500">{booking.customer?.email}</div>}
+              </div>
+            </div>
+          </div>
 
-      {notifications.length > 0 && (
-        <div className="card" style={{ marginTop: 24 }}>
-          <div className="card-head">Notification Log</div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Channel</th>
-                  <th>Type</th>
-                  <th>Recipient</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notifications.map(n => (
-                  <tr key={n.id}>
-                    <td>{fmtDate(n.created_at)}</td>
-                    <td>{n.channel}</td>
-                    <td>{n.type}</td>
-                    <td>{n.recipient}</td>
-                    <td><span className="badge" style={{ backgroundColor: '#FFF4E5', color: '#B5502F', border: '1px solid #FFE4C4' }}>{n.status}</span></td>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2"><CreditCard size={18} className="text-gray-400" /> Payment History</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">Date</th>
+                    <th className="px-5 py-3 font-medium">Method</th>
+                    <th className="px-5 py-3 font-medium">Reference</th>
+                    <th className="px-5 py-3 font-medium text-right">Amount</th>
+                    <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {payments.map((p, index) => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3 text-gray-600">{fmtDate(p.date)}</td>
+                      <td className="px-5 py-3 text-gray-900">{p.method}</td>
+                      <td className="px-5 py-3 text-gray-500">{p.ref_id || '—'}</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-medium text-gray-900">
+                        {p.status === 'Refunded' ? `-${fmtINR(p.amount)}` : fmtINR(p.amount)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          p.status === 'Refunded' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {p.status === 'Completed' && (
+                            <button className="p-1.5 text-gray-400 hover:text-red-600 rounded hover:bg-gray-100 transition-colors" title="Refund Payment" onClick={() => handleRefund(p)}>
+                              <Undo2 size={16} />
+                            </button>
+                          )}
+                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="View Receipt" onClick={() => handleViewReceipt(p, index)}>
+                            <Eye size={16} />
+                          </button>
+                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="Download PDF" onClick={() => handleDownloadReceipt(p, index)}>
+                            <Download size={16} />
+                          </button>
+                          <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-gray-100 transition-colors" title="Email Receipt" onClick={() => handleDemoSend('Email', 'Payment Receipt')}>
+                            <Mail size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {payments.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-8 text-center text-gray-500">
+                        No payments recorded yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      )}
 
-      {showPaymentModal && (
+        {/* Sidebar Summary (1/3) */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-gray-900 rounded-xl shadow-sm overflow-hidden text-white">
+            <div className="p-5 border-b border-gray-800">
+              <h2 className="text-base font-semibold">Financial Summary</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex justify-between items-center text-sm text-gray-300">
+                <span>Base Amount</span>
+                <span className="font-medium text-white">{fmtINR(booking.base_amount)}</span>
+              </div>
+              {booking.tax_enabled && (
+                <div className="flex justify-between items-center text-sm text-gray-300">
+                  <span>Taxes (GST {booking.tax_rate}%)</span>
+                  <span className="font-medium text-white">{fmtINR(booking.tax_amount)}</span>
+                </div>
+              )}
+              {booking.discount > 0 && (
+                <div className="flex justify-between items-center text-sm text-gray-300">
+                  <span>Discount</span>
+                  <span className="font-medium text-green-400">-{fmtINR(booking.discount)}</span>
+                </div>
+              )}
+              
+              <div className="pt-4 border-t border-gray-800">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-300">Total Booking</span>
+                  <span className="text-lg font-bold">{fmtINR(booking.grand_total)}</span>
+                </div>
+              </div>
+              
+              <div className="bg-gray-800 rounded-lg p-4 space-y-3 mt-4">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-300">Paid so far</span>
+                  <span className="font-medium text-green-400">{fmtINR(totalPaid)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-200 font-medium">Balance Due</span>
+                  <span className={`text-lg font-bold ${balanceDue > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                    {fmtINR(balanceDue)}
+                  </span>
+                </div>
+              </div>
+              
+              {balanceDue > 0 && (
+                <button 
+                  className="w-full py-2.5 bg-white text-gray-900 rounded-lg font-semibold text-sm hover:bg-gray-100 transition-colors mt-2"
+                  onClick={() => setShowPayModal(true)}
+                >
+                  Record Payment
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h2>
+            <div className="space-y-2">
+              <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-lg hover:bg-gray-50 border border-transparent transition-colors" onClick={() => handleDemoSend('Email', 'Booking Confirmation')}>
+                <Mail size={16} className="text-gray-400" /> Send Confirmation Email
+              </button>
+              <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 rounded-lg hover:bg-gray-50 border border-transparent transition-colors" onClick={() => handleDemoSend('WhatsApp', 'Booking Confirmation')}>
+                <MessageCircle size={16} className="text-gray-400" /> Send WhatsApp Message
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showPayModal && (
         <AddPaymentModal 
           booking={booking} 
-          balanceDue={balanceDue} 
-          previouslyPaid={totalPaid}
-          onClose={() => setShowPaymentModal(false)}
-          onComplete={() => {
-            setShowPaymentModal(false);
+          balanceDue={balanceDue}
+          onClose={() => setShowPayModal(false)} 
+          onSuccess={() => {
+            setShowPayModal(false);
             load();
           }} 
         />

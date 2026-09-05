@@ -44,6 +44,8 @@ export interface Booking {
   booking_status: string;
   payment_status: string;
   created_at: string;
+  customer?: Customer;
+  property?: Property;
 }
 
 export interface Payment {
